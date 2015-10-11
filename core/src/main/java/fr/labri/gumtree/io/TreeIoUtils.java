@@ -4,6 +4,8 @@ import java.io.FileNotFoundException;
 import java.io.FileReader;
 import java.io.FileWriter;
 import java.io.IOException;
+import java.io.InputStream;
+import java.io.InputStreamReader;
 import java.io.Reader;
 import java.io.StringReader;
 import java.io.StringWriter;
@@ -15,9 +17,12 @@ import javax.xml.stream.XMLInputFactory;
 import javax.xml.stream.XMLOutputFactory;
 import javax.xml.stream.XMLStreamException;
 import javax.xml.stream.XMLStreamWriter;
+import javax.xml.stream.events.Attribute;
 import javax.xml.stream.events.EndElement;
 import javax.xml.stream.events.StartElement;
 import javax.xml.stream.events.XMLEvent;
+
+import com.google.gson.stream.JsonWriter;
 
 import fr.labri.gumtree.matchers.MappingStore;
 import fr.labri.gumtree.tree.Tree;
@@ -38,6 +43,10 @@ public final class TreeIoUtils {
 	private TreeIoUtils() {
 	}
 	
+	public static Tree fromXml(InputStream iStream) {
+		return fromXml(new InputStreamReader(iStream));
+	}
+	
 	public static Tree fromXml(Reader source) {
 		XMLInputFactory fact = XMLInputFactory.newInstance();
 		try {
@@ -50,31 +59,21 @@ public final class TreeIoUtils {
 					StartElement s = (StartElement) e;
 					int type = Integer.parseInt(s.getAttributeByName(TYPE).getValue());
 					
-					Tree t = new Tree(type);
+					Tree t = new Tree(type, labelForAttribute(s, LABEL), labelForAttribute(s, TYPE_LABEL));
 					
-					if (s.getAttributeByName(LABEL) != null) {
-						String label = s.getAttributeByName(LABEL).getValue();
-						t.setLabel(label);
-					}
-					
-					if (s.getAttributeByName(TYPE_LABEL) != null) {
-						String typeLabel = s.getAttributeByName(TYPE_LABEL).getValue();
-						t.setTypeLabel(typeLabel);
-					}
 					
 					if (s.getAttributeByName(POS) != null) {
-						int pos = Integer.parseInt(s.getAttributeByName(POS).getValue());
-						int length = Integer.parseInt(s.getAttributeByName(LENGTH).getValue());
+						int pos = numberForAttribute(s, POS);
+						int length = numberForAttribute(s, LENGTH);
 						t.setPos(pos);
 						t.setLength(length);
-						
 					}
 					
 					if (s.getAttributeByName(LINE_BEFORE) != null) {
-						int l0 = Integer.parseInt(s.getAttributeByName(LINE_BEFORE).getValue());
-						int c0 = Integer.parseInt(s.getAttributeByName(COL_BEFORE).getValue());
-						int l1 = Integer.parseInt(s.getAttributeByName(LINE_AFTER).getValue());
-						int c1 = Integer.parseInt(s.getAttributeByName(COL_AFTER).getValue());
+						int l0 = numberForAttribute(s, LINE_BEFORE);
+						int c0 = numberForAttribute(s, COL_BEFORE);
+						int l1 = numberForAttribute(s, LINE_AFTER);
+						int c1 = numberForAttribute(s, COL_AFTER);
 						t.setLcPosStart(new int[] {l0, c0});
 						t.setLcPosEnd(new int[] {l1, c1});
 					}
@@ -281,4 +280,68 @@ public final class TreeIoUtils {
 		}
 	}
 
+	public static void toJSON(Tree t, String file) {
+		try {
+			FileWriter f = new FileWriter(file);
+			f.append(toJSON(t));
+			f.close();
+		} catch (IOException e) {
+			e.printStackTrace();
+		}
+	}
+
+	public static String toJSON(Tree t) {
+		StringWriter s = new StringWriter();
+		String result = null;
+		try {
+			JsonWriter w = new JsonWriter(s);
+			w.setIndent("\t");			
+			writeJSONTree(t, w);
+			w.close();
+			
+			result = s.toString();
+			s.close();
+		} catch (Exception e) {
+			e.printStackTrace();
+		}
+		return result;
+	}
+
+	private static void writeJSONTree(Tree t, JsonWriter w) throws IOException {
+		w.beginObject();
+		
+		w.name("type").value(Integer.toString(t.getType()));
+
+		if (!Tree.NO_LABEL.equals(t.getLabel())) w.name("label").value(t.getLabel());
+		if (!Tree.NO_LABEL.equals(t.getTypeLabel())) w.name("typeLabel").value(t.getTypeLabel());
+		
+		if (Tree.NO_VALUE != t.getPos()) {
+			w.name("pos").value(Integer.toString(t.getPos()));
+			w.name("length").value(Integer.toString(t.getLength()));
+		}
+		
+		if (t.getLcPosStart() != null) {
+			w.name("line_before").value(Integer.toString(t.getLcPosStart()[0]));
+			w.name("col_before").value(Integer.toString(t.getLcPosStart()[1]));
+			w.name("line_after").value(Integer.toString(t.getLcPosEnd()[0]));
+			w.name("col_after").value(Integer.toString(t.getLcPosEnd()[1]));
+		}
+		
+		w.name("children");
+		w.beginArray();
+		for (Tree c: t.getChildren())
+			writeJSONTree(c, w);
+		w.endArray();
+		
+		w.endObject();
+	}
+
+	static String labelForAttribute(StartElement s, QName attrName) {
+		Attribute attr = s.getAttributeByName(attrName);
+		return attr == null ? Tree.NO_LABEL : attr.getValue();
+	}
+
+	static int numberForAttribute(StartElement s, QName attrName) {
+		return Integer.parseInt(s.getAttributeByName(attrName).getValue());
+	}
 }

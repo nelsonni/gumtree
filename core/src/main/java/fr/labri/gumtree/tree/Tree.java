@@ -1,7 +1,10 @@
 package fr.labri.gumtree.tree;
 
 import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.Iterator;
 import java.util.List;
+import java.util.Map;
 
 public class Tree {
 	
@@ -49,11 +52,7 @@ public class Tree {
 	//TODO remove the matched attribute
 	private boolean matched;
 
-	// Takes a lot of useless memory, should not be implemented this way.
-	//TODO fix implementation of type label.
-	private String typeLabel;
-	
-	// Needed for Rted :(
+	// Needed for RTED :(
 	private Object tmpData;
 	
 	public Tree(int type) {
@@ -66,8 +65,8 @@ public class Tree {
 
 	public Tree(int type, String label, String typeLabel) {
 		this.type = type;
-		this.label = (label == null ) ? "" : label;
-		this.typeLabel = typeLabel;
+		registerTypeLabel(type, typeLabel == null ? NO_LABEL : typeLabel);
+		this.label = (label == null) ? NO_LABEL : label.intern();
 		this.children = new ArrayList<Tree>();
 		this.id = NO_ID;
 		this.depth = NO_VALUE;
@@ -103,8 +102,7 @@ public class Tree {
 	 * @return a shallow copy of the tree, including type, id, label, typeLabel, position and length. 
 	 */
 	public Tree copy() {
-		Tree t = new Tree(this.getType(), this.getLabel());
-		t.setTypeLabel(this.getTypeLabel());
+		Tree t = new Tree(this.getType(), this.getLabel(), this.getTypeLabel());
 		t.setId(this.getId());
 		t.setMatched(this.isMatched());
 		t.setPos(this.getPos());
@@ -255,7 +253,7 @@ public class Tree {
 	}
 	
 	public String getTypeLabel() {
-		return typeLabel;
+		return typeLabels.get(type);
 	}
 
 	@Override
@@ -326,6 +324,24 @@ public class Tree {
 		if (!this.isCompatible(t)) return false;
 		else if (!this.getLabel().equals(t.getLabel())) return false;
 		return true;
+	}
+
+	public Iterable<Tree> postOrder() {
+		return new Iterable<Tree>() {
+			@Override
+			public Iterator<Tree> iterator() {
+				return TreeUtils.postOrderIterator(Tree.this);
+			}
+		};
+	}
+	
+	public Iterable<Tree> breadthFirst() {
+		return new Iterable<Tree>() {
+			@Override
+			public Iterator<Tree> iterator() {
+				return TreeUtils.breadthFirstIterator(Tree.this);
+			}
+		};
 	}
 
 	public int positionInParent() {
@@ -409,19 +425,15 @@ public class Tree {
 		this.type = type;
 	}
 
-	public void setTypeLabel(String typeLabel) {
-		this.typeLabel = typeLabel;
-	}
-
 	public String toCompleteString() {
-		return label + "@" + typeLabel + ":" + type + " [id=" + id + ", depth:" + depth + ", maxdepth=" + height + ", digest=" + digest + ", pos=" + pos + ", length=" + length + "]";
+		return label + "@" + getTypeLabel() + ":" + type + " [id=" + id + ", depth:" + depth + ", maxdepth=" + height + ", digest=" + digest + ", pos=" + pos + ", length=" + length + "]";
 	}
 
 	public String toCompleteTreeString() {
-		if (isLeaf()) return this.toString();
+		if (isLeaf()) return toString();
 		else {
 			StringBuffer b = new StringBuffer();
-			b.append(toString() + " (");
+			b.append(toString() + "(");
 			for (Tree c : getChildren())
 				b.append(c.toCompleteTreeString() + " ");
 			b.append(")");
@@ -445,7 +457,7 @@ public class Tree {
 	@Override
 	public String toString() {
 		if (!"".equals(getLabel())) {
-			return getTypeLabel() + ": " + getLabel();
+			return getId() + ": " + getLabel();
 		} else {
 			/*if (!"".equals(getChildrenLabels())) return getTypeLabel() + ": " + getChildrenLabels();
 			else*/ return getTypeLabel();
@@ -470,5 +482,16 @@ public class Tree {
 		StringBuffer b = new StringBuffer();
 		for (Tree t : TreeUtils.preOrder(this)) b.append(indent(t) + t.toString() + "\n");
 		return b.toString();
+	}
+
+	static Map<Integer, String> typeLabels = new HashMap<>();
+	static private void registerTypeLabel(int type, String name) {
+		if (name.equals(NO_LABEL))
+			return;
+		String typeLabel = typeLabels.get(type);
+		if (typeLabel == null) {
+			typeLabels.put(type, name);
+		} else if (!typeLabel.equals(name))
+			throw new RuntimeException(String.format("Redefining type %d: '%s' with '%s'", type, typeLabel, name));
 	}
 }

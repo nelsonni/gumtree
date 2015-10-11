@@ -1,9 +1,12 @@
 package fr.labri.gumtree.tree;
 
+import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.Deque;
 import java.util.Iterator;
 import java.util.List;
+import java.util.NoSuchElementException;
 
 import fr.labri.gumtree.matchers.Mapping;
 
@@ -19,8 +22,7 @@ public final class TreeUtils {
 	 * @param tree a Tree
 	 */
 	public static void computeSize(Tree tree) {
-		List<Tree> trees = postOrder(tree);
-		for (Tree t: trees) {
+		for (Tree t: tree.postOrder()) {
 			int size = 1;
 			if (!t.isLeaf()) for (Tree c: t.getChildren()) size += c.getSize();
 			t.setSize(size);
@@ -61,8 +63,7 @@ public final class TreeUtils {
 	 * @param tree a Tree.
 	 */
 	public static void computeHeight(Tree tree) {
-		List<Tree> trees = postOrder(tree);
-		for (Tree t: trees) {
+		for (Tree t: tree.postOrder()) {
 			int height = 0;
 			if (!t.isLeaf()) {
 				for (Tree c: t.getChildren()) {
@@ -72,23 +73,6 @@ public final class TreeUtils {
 				height++;
 			}
 			t.setHeight(height);
-		}
-	}
-
-	public static void order(Tree tree) {
-		order(tree, OrderKind.POST_ORDER);
-	}
-	
-	public static void order(Tree tree, OrderKind kind) {
-		switch(kind) {
-		case PRE_ORDER:
-			preOrderNumbering(tree);
-			return;
-		case POST_ORDER:
-			postOrderNumbering(tree);
-			return;
-		case BFS_ORDER:
-			bfsOrderNumbering(tree);
 		}
 	}
 
@@ -118,7 +102,7 @@ public final class TreeUtils {
 	 * @param tree a Tree.
 	 * @return
 	 */
-	public static List<Tree> bfsOrder(Tree tree) {
+	public static List<Tree> breadthFirst(Tree tree) {
 		List<Tree> trees = new ArrayList<>();
 		List<Tree> currents = new ArrayList<>();
 		currents.add(tree);
@@ -129,10 +113,59 @@ public final class TreeUtils {
 		}
 		return trees;
 	}
-
-	public static void bfsOrderNumbering(Tree tree) {
-		List<Tree> trees = bfsOrder(tree);
-		for (int i = 0; i < trees.size(); i++) trees.get(i).setId(i);
+	
+	private static Tree fakeTree(Tree tree) {
+		Tree t = new Tree(-1);
+		t.getChildren().add(tree);
+		return t;
+	}
+	
+	public static Iterator<Tree> breadthFirstIterator(final Tree tree) {
+		return new Iterator<Tree>() {
+			Deque<Iterator<Tree>> fifo = new ArrayDeque<>();
+			{
+				addLasts(fakeTree(tree));
+			}
+			
+			@Override
+			public boolean hasNext() {
+				return !fifo.isEmpty();
+			}
+			
+			@Override
+			public Tree next() {
+				while (!fifo.isEmpty()) {
+					Iterator<Tree> it = fifo.getFirst();
+					if (it.hasNext()) {
+						Tree item = it.next();
+						if (!it.hasNext())
+							fifo.removeFirst();
+						addLasts(item);
+						return item;
+					}
+				}
+				throw new NoSuchElementException();
+			}
+			private void addLasts(Tree item) {
+				List<Tree> children = item.getChildren();
+				if (!children.isEmpty())
+					fifo.addLast(children.iterator());
+			}
+			@Override
+			public void remove() {
+				throw new RuntimeException("Not yet implemented implemented.");
+			}
+		};
+	}
+	
+	public static void breadthFirstNumbering(Tree tree) {
+		numbering(tree.breadthFirst());
+	}
+	
+	public static void numbering(Iterable<Tree> iterable) {
+		int i = 0;
+		for (Tree t: iterable)
+			t.setId(i++);
 	}
 
 	/**
@@ -150,10 +183,76 @@ public final class TreeUtils {
 		if (!tree.isLeaf()) for (Tree c: tree.getChildren()) postOrder(c, trees);
 		trees.add(tree);
 	}
+	
+	public static Iterator<Tree> postOrderIterator(final Tree tree) {
+		return new Iterator<Tree>() {
+			Deque<Pair<Tree, Iterator<Tree>>> stack = new ArrayDeque<>();
+			{
+				push(tree);
+			}
+			
+			@Override
+			public boolean hasNext() {
+				return stack.size() > 0;
+			}
 
+			@Override
+			public Tree next() {
+				if (stack.isEmpty())
+					throw new NoSuchElementException();
+				return selectNextChild(stack.peek().getSecond());
+			}
+			
+			Tree selectNextChild(Iterator<Tree> it) {
+				if (!it.hasNext())
+					return stack.pop().getFirst();
+				Tree item = it.next();
+				if (item.isLeaf())
+					return item;
+				return selectNextChild(push(item));
+			}
+
+			private Iterator<Tree> push(Tree item) {
+				Iterator<Tree> it = item.getChildren().iterator();
+				stack.push(new Pair<>(item, it));
+				return it;
+			}
+
+			@Override
+			public void remove() {
+				throw new RuntimeException("Not yet implemented implemented.");
+			}
+		};
+	}
+	
+	public static Iterator<Tree> leafIterator(final Iterator<Tree> it) {
+		return new Iterator<Tree>() {
+			Tree current = it.hasNext() ? it.next() : null;
+			@Override
+			public boolean hasNext() {
+				return current != null;
+			}
+
+			@Override
+			public Tree next() {
+				Tree val = current;
+				while (it.hasNext()) {
+					current = it.next();
+					if (current.isLeaf())
+						break;
+				}
+				return val;
+			}
+
+			@Override
+			public void remove() {
+				throw new RuntimeException("Not yet implemented implemented.");
+			}
+		};
+	}
+	
 	public static void postOrderNumbering(Tree tree) {
-		List<Tree> trees = postOrder(tree);
-		for (int i = 0; i < trees.size(); i++) trees.get(i).setId(i);
+		numbering(tree.postOrder());
 	}
 
 	public static void removeMapped(Collection<? extends Mapping> mappings) {
@@ -207,11 +306,4 @@ public final class TreeUtils {
 		}
 		return tree;
 	}
-
-	public enum OrderKind {
-		PRE_ORDER,
-		POST_ORDER,
-		BFS_ORDER;
-	}
-
 }

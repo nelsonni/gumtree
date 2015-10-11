@@ -78,7 +78,7 @@ public class ActionGenerator {
 		lastId = newSrc.getSize() + 1;
 		newMappings.link(vsrc, vdst);
 		
-		List<Tree> bfsDst = TreeUtils.bfsOrder(origDst); 
+		List<Tree> bfsDst = TreeUtils.breadthFirst(origDst); 
 		for (Tree x: bfsDst) {
 			Tree w = null;
 			Tree y = x.getParent();
@@ -88,8 +88,7 @@ public class ActionGenerator {
 				int k = findPos(x);
 				// Insertion case : insert new node.
 				int wId = newId();
-				w = new Tree(x.getType(), x.getLabel());
-				w.setTypeLabel(x.getTypeLabel());
+				w = new Tree(x.getType(), x.getLabel(), x.getTypeLabel());
 				w.setPos(x.getPos());
 				w.setLength(x.getLength());
 				w.setId(wId);
@@ -130,8 +129,7 @@ public class ActionGenerator {
 			alignChildren(w, x);
 		}
 		
-		List<Tree> poSrc = TreeUtils.postOrder(newSrc);	
-		for (Tree w : poSrc) {
+		for (Tree w : newSrc.postOrder()) {
 			if (!newMappings.hasSrc(w)) {
 				actions.add(new Delete(origSrcTrees.get(w.getId())));
 				w.getParent().getChildren().remove(w);
